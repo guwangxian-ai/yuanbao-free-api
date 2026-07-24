@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sse_starlette.sse import EventSourceResponse
 
 from src.config import settings
+from src.const import MODEL_MAPPING
 from src.dependencies.auth import get_authorized_headers
 from src.schemas.chat import ChatCompletionRequest, YuanBaoChatCompletionRequest
 from src.services.chat.completion import create_completion_stream
@@ -14,6 +15,22 @@ from src.utils.chat import get_model_info, parse_messages
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
+
+
+@router.get("/v1/models")
+async def list_models():
+    return {
+        "object": "list",
+        "data": [
+            {
+                "id": model_id,
+                "object": "model",
+                "created": 0,
+                "owned_by": "yuanbao",
+            }
+            for model_id in MODEL_MAPPING
+        ],
+    }
 
 
 @router.post("/v1/chat/completions")

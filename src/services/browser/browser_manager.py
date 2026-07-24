@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from typing import Dict, Optional
+from urllib.parse import urljoin
 
 from playwright.async_api import Browser, Page, async_playwright
 
@@ -70,22 +71,39 @@ class BrowserManager:
         await self.ensure_browser()
 
         try:
-            login_button = self.page.get_by_role("img").first
-            await login_button.wait_for(state="visible")
-            await login_button.click()
+            login_dialog = self.page.locator(".hyc-login-v2").first
+            if not await login_dialog.is_visible():
+                login_button = self.page.locator(".agent-dialogue__tool__login").first
+                await login_button.wait_for(state="visible")
+                await login_button.click()
+                await login_dialog.wait_for(state="visible", timeout=10000)
 
             iframe_frame = self.page.frame_locator("iframe")
-            qrcode_locator = iframe_frame.get_by_role("img")
-            await qrcode_locator.wait_for(state="visible", timeout=10000)
+            qrcode_locator = iframe_frame.locator("img").first
+            await qrcode_locator.wait_for(state="attached", timeout=10000)
 
-            await qrcode_locator.screenshot(path=settings.qrcode_path)
+            iframe_src = await self.page.locator("iframe").first.get_attribute("src")
+            qrcode_src = await qrcode_locator.get_attribute("src")
+            if not iframe_src or not qrcode_src:
+                raise RuntimeError("QRCode URL not found")
+
+            qrcode_url = urljoin(iframe_src, qrcode_src)
+            qrcode_response = await self.page.context.request.get(qrcode_url)
+            if not qrcode_response.ok:
+                raise RuntimeError(f"QRCode download failed: {qrcode_response.status}")
+
+            with open(settings.qrcode_path, "wb") as qrcode_file:
+                qrcode_file.write(await qrcode_response.body())
             logger.info(f"[Browser] 二维码已保存至 {settings.qrcode_path}")
 
-            print_qr_to_terminal(settings.qrcode_path)
+            try:
+                print_qr_to_terminal(settings.qrcode_path)
+            except UnicodeEncodeError as e:
+                logger.warning(f"[Browser] QRCode terminal output skipped: {e}")
 
             logger.info("[Browser] 等待扫码完成...")
             try:
-                await login_button.wait_for(state="detached", timeout=settings.login_timeout)
+                await login_dialog.wait_for(state="detached", timeout=settings.login_timeout)
                 logger.info("[Browser] 扫码成功，按钮已消失")
                 self._is_logged_in = True
                 return {

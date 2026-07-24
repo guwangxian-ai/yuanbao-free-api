@@ -77,4 +77,13 @@ async def process_response_stream(response: httpx.Response, model_id: str) -> As
         chunk_data: Dict = json.loads(data)
         if chunk_data.get("stopReason"):
             finish_reason = chunk_data["stopReason"]
-        yield _create_chunk(json.dumps(chunk_data, ensure_ascii=False))
+            yield _create_chunk("", finish_reason)
+            yield "[DONE]"
+            break
+
+        if chunk_data.get("type") != "text":
+            continue
+
+        content = chunk_data.get("msg")
+        if content:
+            yield _create_chunk(content)
