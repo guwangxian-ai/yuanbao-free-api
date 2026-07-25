@@ -24,6 +24,8 @@ class Settings(BaseSettings):
     header_timeout: float = 3.0
     header_api_pattern: str = "yuanbao.tencent.com/api"
     upload_host: str = "hunyuan-prod-1258344703.cos.accelerate.myqcloud.com"
+    image_generation_timeout: int = 180
+    image_download_timeout: int = 60
 
     model_config = SettingsConfigDict(
         env_file=".env",

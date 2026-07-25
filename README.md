@@ -73,6 +73,10 @@ API_KEYS=sk-your-api-key-here,sk-another-api-key
 
 # 扫码等待时间，单位为毫秒；可选
 LOGIN_TIMEOUT=300000
+
+# 图片生成和图片下载超时，单位为秒；可选
+IMAGE_GENERATION_TIMEOUT=180
+IMAGE_DOWNLOAD_TIMEOUT=60
 ```
 
 `.env` 不会被 Git 提交。修改密钥后需要重启服务。
@@ -120,6 +124,7 @@ LOGIN_TIMEOUT=300000
 | `GET /v1/models` | 支持 |
 | `GET /v1/models/{model}` | 支持 |
 | `POST /v1/chat/completions` | 支持 |
+| `POST /v1/images/generations` | 支持，等待元宝完成异步绘图后返回图片 |
 | `stream: false` 标准 JSON | 支持，默认模式 |
 | `stream: true` SSE | 支持 |
 | `system` / `user` / `assistant` / `tool` | 支持 |
@@ -127,6 +132,8 @@ LOGIN_TIMEOUT=300000
 | `tools` / `tool_calls` | 通过严格 JSON 提示词适配，可靠性取决于上游模型 |
 | OpenAI 消息中的 `image_url` | 暂不支持；使用项目的 `/v1/upload` 和 `multimedia` 扩展 |
 | `temperature` / `top_p` / `max_tokens` | 接受参数，但元宝网页接口不保证执行 |
+
+当聊天请求触发元宝绘图时，`/v1/chat/completions` 会把最终图片转换为 Markdown 图片链接。需要稳定的结构化图片结果时，应优先调用 `/v1/images/generations`。
 
 接口采用 OpenAI Chat Completions 作为唯一公共协议。客户端添加服务时选择“OpenAI”或“自定义 OpenAI”。
 
@@ -194,6 +201,48 @@ for chunk in stream:
     print(chunk.choices[0].delta.content or "", end="", flush=True)
 ```
 
+### 生成图片
+
+元宝当前一次绘图会生成 4 张图片。接口默认返回 4 张；`n` 可设置为 `1` 到 `4`，服务会等待整批生成完成后返回指定数量。临时会话会在图片 URL 获取完成后自动删除，不会留在元宝会话列表中。
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://127.0.0.1:8000/v1",
+    api_key="sk-your-api-key-here",
+)
+
+result = client.images.generate(
+    model="yuanbao-image",
+    prompt="一杯放在木桌上的热咖啡，窗边自然光，写实摄影",
+    n=4,
+    size="1024x1024",
+)
+
+for image in result.data:
+    print(image.url)
+```
+
+PowerShell：
+
+```powershell
+$body = @{
+  model = "yuanbao-image"
+  prompt = "一只戴墨镜的橘猫，电影感，正方形构图，不要文字"
+  n = 4
+  response_format = "url"
+} | ConvertTo-Json
+
+Invoke-RestMethod http://127.0.0.1:8000/v1/images/generations `
+  -Method POST `
+  -Headers @{ Authorization = "Bearer sk-your-api-key-here" } `
+  -ContentType "application/json" `
+  -Body $body
+```
+
+`response_format` 支持 `url` 和 `b64_json`。`url` 返回腾讯云签名地址；需要立即保存或跨系统传输图片时可用 `b64_json`，但响应体会明显增大。`size` 会转换为横版、竖版或方形构图要求，上游不保证输出精确像素尺寸。
+
 ## 支持的模型
 
 | 模型 ID | 说明 |
@@ -206,6 +255,8 @@ for chunk in stream:
 | `hunyuan-t1` | 腾讯混元 T1 |
 | `hunyuan-search` | 腾讯混元，启用联网搜索 |
 | `hunyuan-t1-search` | 腾讯混元 T1，启用联网搜索 |
+| `yuanbao-image` | 元宝图片生成（推荐的图片模型 ID） |
+| `hunyuan-image` | `yuanbao-image` 的兼容别名 |
 
 模型由腾讯元宝网页端提供，实际可用性可能随账号权限和网页端调整而变化。
 
@@ -247,6 +298,7 @@ python -m uvicorn app:app --host 0.0.0.0 --port 8001
 | `GET` | `/v1/models` | 获取模型列表 |
 | `GET` | `/v1/models/{model}` | 获取单个模型信息 |
 | `POST` | `/v1/chat/completions` | OpenAI 兼容聊天（流式/非流式） |
+| `POST` | `/v1/images/generations` | OpenAI 兼容图片生成 |
 | `POST` | `/v1/upload` | 上传图片或文件 |
 | `GET` | `/health` | 服务进程健康检查 |
 | `GET` | `/ready` | 元宝扫码登录状态 |

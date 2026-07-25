@@ -169,6 +169,53 @@ class OpenAICompatibilityTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(content, "hello")
         self.assertEqual(events[-1], {"type": "finish", "finish_reason": "stop"})
 
+    async def test_generated_images_are_extracted_from_replace_event(self):
+        replace_event = {
+            "type": "replace",
+            "replace": {
+                "assetId": "asset-1",
+                "multimedias": [
+                    {
+                        "mediaId": "image-1",
+                        "mediaType": "image",
+                        "available": True,
+                        "url": "https://example.test/image-1.png",
+                        "width": 1536,
+                        "height": 1536,
+                    },
+                    {"type": "loadingImage", "mediaType": "image"},
+                ],
+            },
+        }
+        response = FakeYuanbaoResponse(
+            f"data: {json.dumps(replace_event)}",
+            'data: {"type":"meta","stopReason":"stop"}',
+        )
+        events = [event async for event in process_response_stream(response)]
+        image_event = next(event for event in events if event["type"] == "image")
+        self.assertEqual(image_event["asset_id"], "asset-1")
+        self.assertEqual(image_event["images"][0]["url"], "https://example.test/image-1.png")
+
+    async def test_chat_completion_renders_generated_images_as_markdown(self):
+        request = ChatCompletionRequest(
+            model="deepseek-v3",
+            messages=[{"role": "user", "content": "draw a cat"}],
+        )
+        completion_id, created = create_completion_context()
+        response = await create_chat_completion(
+            event_stream(
+                {"type": "image", "images": [{"url": "https://example.test/cat.png"}]},
+                {"type": "finish", "finish_reason": "stop"},
+            ),
+            request,
+            completion_id,
+            created,
+        )
+        self.assertEqual(
+            response["choices"][0]["message"]["content"],
+            "![generated image 1](https://example.test/cat.png)",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -99,3 +99,4 @@ class YuanBaoChatCompletionRequest(BaseModel):
     chat_model_id: str
     multimedia: List[Media] = Field(default_factory=list)
     support_functions: Optional[List[str]] = None
+    plugin: str = "Adaptive"

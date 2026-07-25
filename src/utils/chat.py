@@ -160,6 +160,33 @@ def _normalize_finish_reason(reason: Any) -> str:
     return "stop"
 
 
+def _extract_generated_images(event: Dict[str, Any]) -> List[Dict[str, Any]]:
+    if event.get("type") != "replace":
+        return []
+    replacement = event.get("replace")
+    if not isinstance(replacement, dict):
+        return []
+
+    images: List[Dict[str, Any]] = []
+    for media in replacement.get("multimedias") or []:
+        if not isinstance(media, dict) or media.get("mediaType") != "image":
+            continue
+        url = media.get("url") or media.get("downloadUrl") or media.get("resourceUrl")
+        if not url or media.get("available") is False:
+            continue
+        images.append(
+            {
+                "url": str(url),
+                "download_url": media.get("downloadUrl"),
+                "resource_url": media.get("resourceUrl"),
+                "width": media.get("width"),
+                "height": media.get("height"),
+                "media_id": media.get("mediaId"),
+            }
+        )
+    return images
+
+
 def _drain_yuanbao_text(buffer: str) -> tuple[str, str]:
     """Remove Yuanbao-only markup while retaining a possible split marker."""
 
@@ -220,6 +247,15 @@ async def process_response_stream(response: httpx.Response) -> AsyncGenerator[Di
                     "completion_tokens": int(usage_info.get("completionTokens", 0)),
                     "total_tokens": int(usage_info.get("totalTokens", 0)),
                 },
+            }
+
+        images = _extract_generated_images(event)
+        if images:
+            replacement = event.get("replace") or {}
+            yield {
+                "type": "image",
+                "images": images,
+                "asset_id": replacement.get("assetId"),
             }
 
         if event.get("stopReason"):

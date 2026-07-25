@@ -11,6 +11,14 @@ from src.utils.chat import parse_tool_calls
 EMPTY_USAGE = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
 
 
+def _images_to_markdown(images: list[Dict[str, Any]]) -> str:
+    return "\n".join(
+        f"![generated image {index}]({image['url']})"
+        for index, image in enumerate(images, start=1)
+        if image.get("url")
+    )
+
+
 def create_completion_context() -> Tuple[str, int]:
     return f"chatcmpl-{uuid.uuid4().hex}", int(time.time())
 
@@ -30,6 +38,10 @@ async def _collect_events(
     async for event in events:
         if event["type"] == "text":
             content_parts.append(event["content"])
+        elif event["type"] == "image":
+            markdown = _images_to_markdown(event["images"])
+            if markdown:
+                content_parts.append(markdown)
         elif event["type"] == "finish":
             finish_reason = event["finish_reason"]
         elif event["type"] == "usage":
@@ -140,6 +152,10 @@ async def create_chat_completion_stream(
         async for event in events:
             if event["type"] == "text":
                 yield _chunk(completion_id, created, request.model, {"content": event["content"]})
+            elif event["type"] == "image":
+                markdown = _images_to_markdown(event["images"])
+                if markdown:
+                    yield _chunk(completion_id, created, request.model, {"content": markdown})
             elif event["type"] == "finish":
                 finish_reason = event["finish_reason"]
             elif event["type"] == "usage":

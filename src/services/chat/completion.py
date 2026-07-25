@@ -45,7 +45,7 @@ async def create_completion_stream(
     body = {
         "model": "gpt_175B_0404",
         "prompt": chat_request.prompt,
-        "plugin": "Adaptive",
+        "plugin": chat_request.plugin,
         "displayPrompt": chat_request.prompt,
         "displayPromptType": 1,
         "options": {"imageIntention": {"needIntentionModel": True, "backendUpdateFlag": 2, "intentionStatus": True}},

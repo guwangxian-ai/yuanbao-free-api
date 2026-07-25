@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sse_starlette.sse import EventSourceResponse
 
 from src.config import settings
-from src.const import MODEL_MAPPING
+from src.const import IMAGE_MODEL_MAPPING, MODEL_MAPPING
 from src.dependencies.auth import get_authorized_headers, require_api_key
 from src.schemas.chat import ChatCompletionRequest, YuanBaoChatCompletionRequest
 from src.services.chat.completion import ChatCompletionError, create_completion_stream
@@ -36,13 +36,13 @@ def _model_object(model_id: str) -> dict:
 async def list_models(_: str = Depends(require_api_key)):
     return {
         "object": "list",
-        "data": [_model_object(model_id) for model_id in MODEL_MAPPING],
+        "data": [_model_object(model_id) for model_id in (*MODEL_MAPPING, *IMAGE_MODEL_MAPPING)],
     }
 
 
 @router.get("/v1/models/{model_id}")
 async def retrieve_model(model_id: str, _: str = Depends(require_api_key)):
-    if model_id not in MODEL_MAPPING:
+    if model_id not in MODEL_MAPPING and model_id not in IMAGE_MODEL_MAPPING:
         raise HTTPException(status_code=404, detail=f"Model '{model_id}' not found")
     return _model_object(model_id)
 

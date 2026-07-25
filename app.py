@@ -7,7 +7,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from src.routers import chat, upload
+from src.routers import chat, image, upload
 from src.services.browser import browser_manager
 
 logging.basicConfig(
@@ -91,6 +91,7 @@ async def readiness():
     return {"status": "ready"}
 
 app.include_router(chat.router)
+app.include_router(image.router)
 app.include_router(upload.router)
 
 

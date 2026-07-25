@@ -10,3 +10,8 @@ MODEL_MAPPING = {
     "hunyuan-search": {"model": "hunyuan_gpt_175B_0404", "support_functions": ["supportInternetSearch"]},
     "hunyuan-t1-search": {"model": "hunyuan_t1", "support_functions": ["supportInternetSearch"]},
 }
+
+IMAGE_MODEL_MAPPING = {
+    "yuanbao-image": {"model": "hunyuan_gpt_175B_0404"},
+    "hunyuan-image": {"model": "hunyuan_gpt_175B_0404"},
+}
