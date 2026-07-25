@@ -8,6 +8,8 @@
 - 将元宝流式事件转换为标准 OpenAI SSE 文本，不再显示 `{"type":"text"...}` 原始数据。
 - 修复新版元宝登录页的二维码定位与下载。
 - Windows 控制台无法输出二维码字符时，仍会保存 `qrcode.png` 供扫码。
+- 支持标准 OpenAI 流式与非流式 Chat Completions 响应。
+- 支持 OpenAI 消息角色、JSON 响应约束和基础 `tools/tool_calls` 适配。
 
 > 本项目仅供学习和研究。网页接口可能随时变化，频繁或不当使用可能导致账号受限。请遵守腾讯元宝的服务条款。
 
@@ -105,6 +107,29 @@ LOGIN_TIMEOUT=300000
 
 ## API 测试
 
+### 无状态调用
+
+客户端只需在每次请求中传入完整的 `messages` 历史，不需要传 `chat_id`。服务会保留每条消息的 `system`、`user`、`assistant` 角色，将历史一并转发；元宝侧的临时会话会在响应流结束后自动清理。
+
+只有希望由元宝侧持续保留同一会话时，才需要自行传入 `chat_id`；此时可设置 `should_remove_conversation: true` 在本次响应结束后清理它。
+
+### OpenAI 兼容范围
+
+| 能力 | 状态 |
+| --- | --- |
+| `GET /v1/models` | 支持 |
+| `GET /v1/models/{model}` | 支持 |
+| `POST /v1/chat/completions` | 支持 |
+| `stream: false` 标准 JSON | 支持，默认模式 |
+| `stream: true` SSE | 支持 |
+| `system` / `user` / `assistant` / `tool` | 支持 |
+| `response_format` JSON 约束 | 通过提示词适配 |
+| `tools` / `tool_calls` | 通过严格 JSON 提示词适配，可靠性取决于上游模型 |
+| OpenAI 消息中的 `image_url` | 暂不支持；使用项目的 `/v1/upload` 和 `multimedia` 扩展 |
+| `temperature` / `top_p` / `max_tokens` | 接受参数，但元宝网页接口不保证执行 |
+
+接口采用 OpenAI Chat Completions 作为唯一公共协议。客户端添加服务时选择“OpenAI”或“自定义 OpenAI”。
+
 ### 查看模型列表
 
 浏览器打开：
@@ -127,6 +152,7 @@ PowerShell：
 ```powershell
 $body = @{
   model = "deepseek-v3"
+  stream = $false
   messages = @(
     @{ role = "user"; content = "你好，请用一句话介绍自己" }
   )
@@ -145,7 +171,7 @@ curl：
 curl http://127.0.0.1:8000/v1/chat/completions \
   -H "Authorization: Bearer sk-your-api-key-here" \
   -H "Content-Type: application/json" \
-  -d '{"model":"deepseek-v3","messages":[{"role":"user","content":"你好"}]}'
+  -d '{"model":"deepseek-v3","messages":[{"role":"user","content":"你好"}],"stream":false}'
 ```
 
 ### OpenAI Python SDK
@@ -219,8 +245,11 @@ python -m uvicorn app:app --host 0.0.0.0 --port 8001
 | 方法 | 路径 | 用途 |
 | --- | --- | --- |
 | `GET` | `/v1/models` | 获取模型列表 |
-| `POST` | `/v1/chat/completions` | OpenAI 兼容聊天流 |
+| `GET` | `/v1/models/{model}` | 获取单个模型信息 |
+| `POST` | `/v1/chat/completions` | OpenAI 兼容聊天（流式/非流式） |
 | `POST` | `/v1/upload` | 上传图片或文件 |
+| `GET` | `/health` | 服务进程健康检查 |
+| `GET` | `/ready` | 元宝扫码登录状态 |
 | `GET` | `/docs` | FastAPI 在线接口文档 |
 
 ## 安全说明

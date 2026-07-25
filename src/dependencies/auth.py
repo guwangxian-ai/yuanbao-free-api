@@ -9,20 +9,10 @@ from src.utils.common import generate_headers
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
-async def get_authorized_headers(
+async def require_api_key(
     authorization: HTTPAuthorizationCredentials = Depends(bearer_scheme),
 ):
-    """获取授权的请求头
-
-    Args:
-        authorization: Bearer token 认证信息
-
-    Returns:
-        dict: 包含认证信息的请求头
-
-    Raises:
-        HTTPException: 认证失败时抛出
-    """
+    """Validate the local OpenAI-compatible bearer token."""
     if not authorization or not authorization.credentials:
         raise HTTPException(status_code=401, detail="need token")
 
@@ -31,6 +21,12 @@ async def get_authorized_headers(
     if not validate_api_key(token):
         raise HTTPException(status_code=403, detail="invalid api_key")
 
-    headers = await generate_headers()
+    return token
 
-    return headers
+
+async def get_authorized_headers(
+    _: str = Depends(require_api_key),
+):
+    """Return fresh Yuanbao authentication headers after local API auth."""
+
+    return await generate_headers()

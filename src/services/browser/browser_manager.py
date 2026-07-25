@@ -30,8 +30,13 @@ class BrowserManager:
             self.page: Optional[Page] = None
             self.playwright = None
             self._route_handler = None
+            self._header_lock = asyncio.Lock()
             self._is_logged_in = False
             self._initialized = True
+
+    @property
+    def is_logged_in(self) -> bool:
+        return self._is_logged_in
 
     async def ensure_browser(self):
         """确保浏览器已初始化"""
@@ -126,12 +131,18 @@ class BrowserManager:
             }
 
     async def get_headers(self) -> Optional[Dict]:
-        """获取请求头
+        """Capture fresh Yuanbao request headers without page reload races."""
+
+        await self.ensure_browser()
+        async with self._header_lock:
+            return await self._capture_headers()
+
+    async def _capture_headers(self) -> Optional[Dict]:
+        """Capture request headers from one isolated page reload.
 
         Returns:
             Optional[Dict]: 请求头字典，失败返回 None
         """
-        await self.ensure_browser()
         captured_headers = {}
 
         async def handle_route(route, request):
@@ -211,6 +222,7 @@ class BrowserManager:
             if self.playwright:
                 tasks.append(self.playwright.stop())
                 self.playwright = None
+            self._is_logged_in = False
             if tasks:
                 await asyncio.gather(*tasks, return_exceptions=True)
 

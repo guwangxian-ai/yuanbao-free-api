@@ -1,6 +1,7 @@
-"""聊天完成服务模块"""
+"""Tencent Yuanbao chat completion transport."""
 
-from typing import AsyncGenerator, Dict
+import logging
+from typing import Any, AsyncGenerator, Dict
 
 import httpx
 
@@ -11,6 +12,7 @@ from src.utils.chat import process_response_stream
 CHAT_URL = "https://yuanbao.tencent.com/api/chat/{}"
 
 DEFAULT_TIMEOUT = 60
+logger = logging.getLogger(__name__)
 
 
 class ChatCompletionError(Exception):
@@ -24,7 +26,7 @@ async def create_completion_stream(
     headers: Dict[str, str],
     should_remove_conversation: bool = False,
     timeout: int = DEFAULT_TIMEOUT,
-) -> AsyncGenerator[str, None]:
+) -> AsyncGenerator[Dict[str, Any], None]:
     """创建聊天完成流
 
     Args:
@@ -65,12 +67,15 @@ async def create_completion_stream(
                 headers=headers,
                 timeout=timeout,
             ) as response:
-                async for chunk in process_response_stream(response, chat_request.chat_id):
-                    yield chunk
+                async for event in process_response_stream(response):
+                    yield event
 
     except Exception as e:
         raise ChatCompletionError(e)
 
     finally:
         if should_remove_conversation:
-            await remove_conversation(chat_request.chat_id, headers)
+            try:
+                await remove_conversation(chat_request.chat_id, headers)
+            except Exception as e:
+                logger.warning("Failed to remove temporary conversation %s: %s", chat_request.chat_id, e)
